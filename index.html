@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101827">
+<title>Canlı Gol Sinyali</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#131e30;--muted:#9ba9bd;--line:#29364b;--text:#f4f7fb;--accent:#63e6a6}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(160deg,#101a2b,#09101c 65%);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text);min-height:100vh}
+main{max-width:760px;margin:auto;padding:20px 14px 40px}.top{display:flex;align-items:center;gap:12px;margin:8px 0 20px}.ball{font-size:32px}.title{font-size:24px;font-weight:800;letter-spacing:-.5px}.subtitle{color:var(--muted);font-size:13px;margin-top:3px}
+.panel{background:rgba(19,30,48,.94);border:1px solid var(--line);border-radius:18px;padding:16px;margin:14px 0;box-shadow:0 10px 30px #0002}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.status{color:var(--muted);font-size:13px;flex:1;min-width:180px}
+button,input{font:inherit;border-radius:12px;border:1px solid var(--line);padding:12px;background:#0c1524;color:var(--text)}button{cursor:pointer;font-weight:700}button.primary{background:var(--accent);color:#092016;border:0}input{width:100%;margin:8px 0 10px}label{font-size:13px;color:var(--muted)}
+small,.muted{color:var(--muted)}.match{padding:15px 0;border-bottom:1px solid var(--line)}.match:last-child{border-bottom:0;padding-bottom:0}.teams{font-weight:750;font-size:16px;line-height:1.35}.meta{color:var(--muted);font-size:13px;margin-top:6px}.signal{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px;font-weight:800;margin-top:10px}
+.high{background:#472126;color:#ff9e9e}.medium{background:#493719;color:#ffd47c}.low{background:#1c3448;color:#9ed7ff}.missing{background:#303949;color:#d1d9e5}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}.stat{background:#0b1423;border-radius:12px;padding:10px}.stat b{display:block;font-size:18px}.stat span{font-size:11px;color:var(--muted)}
+details summary{cursor:pointer;font-weight:700}.hint{font-size:12px;line-height:1.5;color:var(--muted)}.error{color:#ffb0b0}.empty{padding:24px 4px;color:var(--muted);text-align:center}
+@media(min-width:600px){main{padding:28px 20px}.title{font-size:29px}}
+</style>
+</head>
+<body><main>
+<header class="top"><div class="ball">⚽</div><div><div class="title">Canlı Gol Sinyali</div><div class="subtitle">Canlı maçlar • gösterge seviyeleri • otomatik yenileme</div></div></header>
+<section class="panel">
+<div class="row"><div id="status" class="status">Sunucu adresini ayarlayıp başlayın.</div><button id="refresh" class="primary">Yenile</button></div>
+<details style="margin-top:14px"><summary>Bağlantı ayarları</summary>
+<label for="api">Backend sunucu adresi (HTTPS)</label>
+<input id="api" placeholder="https://senin-servisin.onrender.com" autocomplete="url">
+<div class="row"><button id="save">Adresi kaydet</button><button id="clear">Temizle</button></div>
+<p class="hint">Bu alan futbol API anahtarı değildir. Buraya kendi sunucunuzun adresi yazılır. API anahtarını bu sayfaya koymayın.</p>
+</details>
+</section>
+<section class="panel">
+<div class="row"><strong style="font-size:18px">Canlı maçlar</strong><span id="count" class="status" style="text-align:right">Henüz veri yok</span></div>
+<div id="matches"><div class="empty">Canlı maç verisi yüklemek için sunucu adresini ayarlayın.</div></div>
+</section>
+<section class="panel">
+<strong>Sinayl nasıl okunur?</strong>
+<div class="grid">
+<div class="stat"><b>Yüksek</b><span>Birden fazla olumlu gösterge</span></div>
+<div class="stat"><b>Orta</b><span>Bazı destekleyici işaretler</span></div>
+<div class="stat"><b>Düşük</b><span>Sınırlı gösterge</span></div>
+</div>
+<p class="hint">Sinyaller kural tabanlı göstergelerdir; doğrulanmış gol olasılığı, bahis tavsiyesi veya gol garantisi değildir. Veri eksikse uygulama bunu ayrıca belirtir.</p>
+</section>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+let timer=null, loading=false;
+const saved=localStorage.getItem('goalSignalBackend')||'';
+$('api').value=saved;
+function setStatus(s,err=false){$('status').textContent=s;$('status').className='status'+(err?' error':'')}
+function normalizeBase(s){return s.trim().replace(/\/+$/,'')}
+function signalClass(s){if(s==='YÜKSEK')return'high';if(s==='ORTA')return'medium';if(s==='DÜŞÜK')return'low';return'missing'}
+function safe(v){return String(v??'—').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function renderMatch(m){
+ const a=m.analysis||{},stats=a.stats_available||{};
+ const minute=m.minute==null?'?':m.minute;
+ return `<article class="match"><div class="teams">${safe(m.match||'Maç')}</div><div class="meta">Skor: <b>${safe(m.score||'—')}</b> · Dakika: ${safe(minute)} · Lig ID: ${safe(m.league_id||'—')}</div><div><span class="signal ${signalClass(a.signal)}">${safe(a.signal||'VERİ EKSİK')}</span></div><div class="meta">${safe(a.signal_label||'Analiz yok')}</div><div class="grid"><div class="stat"><b>${stats.shots==null?'—':safe(stats.shots)}</b><span>Şut (sağlayıcı verirse)</span></div><div class="stat"><b>${stats.shots_on_target==null?'—':safe(stats.shots_on_target)}</b><span>İsabetli şut</span></div><div class="stat"><b>${stats.corners==null?'—':safe(stats.corners)}</b><span>Korner</span></div></div><p class="hint">${safe(a.note||'')}</p></article>`;
+}
+async function load(){
+ if(loading)return;
+ const base=normalizeBase($('api').value);
+ if(!base){setStatus('Önce bağlantı ayarlarından sunucu adresini girin.',true);return}
+ if(!/^https:\/\/[^ ]+/i.test(base)){setStatus('Güvenlik için HTTPS ile başlayan sunucu adresi girin.',true);return}
+ loading=true;$('refresh').disabled=true;setStatus('Canlı veriler alınıyor…');
+ try{
+  const r=await fetch(base+'/matches',{cache:'no-store'});
+  if(!r.ok)throw new Error('Sunucu yanıtı: HTTP '+r.status);
+  const data=await r.json();const ms=data.matches||[];
+  $('count').textContent=ms.length+' maç';
+  $('matches').innerHTML=ms.length?ms.map(renderMatch).join(''):'<div class="empty">Şu anda sağlayıcı canlı maç döndürmüyor.</div>';
+  setStatus('Son güncelleme: '+new Date().toLocaleTimeString('tr-TR')+' · 30 sn sonra yenilenir');
+ }catch(e){setStatus('Veri alınamadı: '+e.message,true);$('count').textContent='Bağlantı bekleniyor';$('matches').innerHTML='<div class="empty">Sunucu adresini ve sunucu durumunu kontrol edin.</div>'}
+ finally{loading=false;$('refresh').disabled=false}
+}
+$('save').onclick=()=>{const v=normalizeBase($('api').value);$('api').value=v;localStorage.setItem('goalSignalBackend',v);load();if(timer)clearInterval(timer);timer=setInterval(load,30000)};
+$('clear').onclick=()=>{localStorage.removeItem('goalSignalBackend');$('api').value='';if(timer)clearInterval(timer);$('matches').innerHTML='<div class="empty">Sunucu adresi temizlendi.</div>';setStatus('Sunucu adresini ayarlayıp başlayın.');$('count').textContent='Henüz veri yok'};
+$('refresh').onclick=load;
+if(saved){load();timer=setInterval(load,30000)}
+</script></body></html>
